@@ -1,0 +1,145 @@
+# ==============================================================================
+# Python & Virtual Environments
+# ==============================================================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+bin/
+lib/
+lib64/
+share/
+include/
+pip-wheel-metadata/
+
+# ==============================================================================
+# Bytecode, Cache & Testing
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.cache/
+
+# ==============================================================================
+# Model Weights & ML Artifacts
+# ==============================================================================
+*.pt
+*.pth
+*.onnx
+*.engine
+*.torchscript
+*.tflite
+*.safetensors
+*.weights
+*.bin
+runs/
+hub/
+hf_cache/
+
+# ==============================================================================
+# Application Data, Uploads & Outputs
+# ==============================================================================
+data/uploads/*
+!data/uploads/.gitkeep
+data/output/*
+!data/output/.gitkeep
+output/
+outputs/
+**/output/*
+**/outputs/*
+!**/output/.gitkeep
+!**/outputs/.gitkeep
+*.parquet
+
+# ==============================================================================
+# Video & Large Media Files
+# ==============================================================================
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+*.wmv
+*.h264
+*.ts
+Test.mp4
+Test2.mp4
+[Tt]est*.mp4
+[Tt]est*
+tracks_annotated.mp4
+
+# ==============================================================================
+# Node.js & Frontend Build Artifacts
+# ==============================================================================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+dist-ssr/
+build/
+.vite/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==============================================================================
+# Environment Variables & Secrets
+# ==============================================================================
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+
+# ==============================================================================
+# Logs & Databases
+# ==============================================================================
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# ==============================================================================
+# OS Metadata & IDE / Editor Artifacts
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Tt]humbs.db
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.temp
