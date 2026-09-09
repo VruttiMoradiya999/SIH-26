@@ -5,7 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/backend" || exit 1
 
 # Try conda python, fallback to python3 / python
-if [ -f "/opt/miniconda3/bin/python3" ]; then
+if [ -f "/opt/anaconda3/bin/python" ]; then
+    PYTHON_CMD="/opt/anaconda3/bin/python"
+elif [ -f "/opt/miniconda3/bin/python3" ]; then
     PYTHON_CMD="/opt/miniconda3/bin/python3"
 elif [ -f "$HOME/miniconda3/bin/python3" ]; then
     PYTHON_CMD="$HOME/miniconda3/bin/python3"
