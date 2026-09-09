@@ -2,7 +2,9 @@
  * api.js — API client for the FastAPI backend.
  */
 
-const API_BASE = '/api';
+// Local Vite development uses the proxy in vite.config.js. Render injects the
+// public backend URL at build time through VITE_API_BASE_URL.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 /**
  * Upload a video file. Returns { job_id, filename }.

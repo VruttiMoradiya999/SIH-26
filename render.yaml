@@ -1,0 +1,36 @@
+# Render Blueprint for FlytBase Drone Traffic Analytics.
+# The frontend calls the public API service URL configured below.
+services:
+  - type: web
+    name: sih-26-drone-api-vrutti
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/jobs
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+
+  - type: web
+    name: sih-26-drone-web-vrutti
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - frontend/**
+        - render.yaml
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://sih-26-drone-api-vrutti.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
