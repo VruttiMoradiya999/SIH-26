@@ -27,26 +27,127 @@ let state = {
   eventSource: null,
 };
 
+// Tracks which dashboard tab is visible so the navbar can highlight it.
+let dashboardPage = 'overview';
+window.addEventListener('flytbase:page', (e) => {
+  dashboardPage = e.detail === 'details' ? 'details' : 'overview';
+  syncNavActive();
+});
+
 function setState(updates) {
   state = { ...state, ...updates };
   render();
 }
 
 function renderHeader() {
+  const view = state.view;
+  const onDashboard = view === 'dashboard';
+  const p = state.progress;
+  const pct = p.total > 0 ? Math.min(Math.round((p.processed / p.total) * 100), 100) : 0;
+
+  const overviewActive = onDashboard && dashboardPage === 'overview';
+  const detailsActive = onDashboard && dashboardPage === 'details';
+  const uploadActive = view === 'upload';
+
+  const cta = view === 'processing'
+    ? `<button class="btn btn-new nav-cta" disabled style="opacity: 0.7; cursor: default;">${pct}% analyzing…</button>`
+    : view === 'dashboard'
+      ? `<button class="btn btn-new nav-cta" data-nav-action="new-video">➕ New video</button>`
+      : `<button class="btn btn-new nav-cta" data-nav-action="choose-video">🎬 Choose video</button>`;
+
   return `
-    <header class="header">
+    <header class="header" id="site-header">
       <div class="container header-inner">
-        <div class="logo">
-          <div class="logo-icon">🛸</div>
-          <div class="logo-text">Flyt<span>Base</span></div>
-        </div>
-        <div class="header-badge">
-          <span class="dot"></span>
-          <span>VisDrone YOLO11s + ByteTrack</span>
+        <button class="logo nav-logo" data-nav="upload" aria-label="FlytBase home">
+          <span class="logo-icon">🛸</span>
+          <span class="logo-text">Flyt<span>Base</span></span>
+        </button>
+        <nav class="nav-links" aria-label="Primary">
+          <button class="nav-link${uploadActive ? ' active' : ''}" data-nav="upload">Upload</button>
+          <button class="nav-link${overviewActive ? ' active' : ''}" data-nav="overview" ${onDashboard ? '' : 'disabled title="Available after analysis"'}>Overview</button>
+          <button class="nav-link${detailsActive ? ' active' : ''}" data-nav="details" ${onDashboard ? '' : 'disabled title="Available after analysis"'}>Tracking &amp; Details</button>
+        </nav>
+        <div class="nav-actions">
+          <span class="header-badge nav-badge">
+            <span class="dot"></span>
+            <span>YOLO11s + ByteTrack</span>
+          </span>
+          ${cta}
+          <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
         </div>
       </div>
     </header>
   `;
+}
+
+function resetToUpload() {
+  if (state.eventSource) state.eventSource.close();
+  setState({
+    view: 'upload',
+    jobId: null,
+    filename: null,
+    progress: { processed: 0, total: 0, fps: 0, eta_s: 0, timestamp_s: 0 },
+    results: null,
+    error: null,
+  });
+  dashboardPage = 'overview';
+}
+
+function syncNavActive() {
+  const header = document.getElementById('site-header');
+  if (!header) return;
+  header.querySelectorAll('.nav-link').forEach(btn => {
+    const id = btn.getAttribute('data-nav');
+    const active =
+      (id === 'upload' && state.view === 'upload') ||
+      (id === 'overview' && state.view === 'dashboard' && dashboardPage === 'overview') ||
+      (id === 'details' && state.view === 'dashboard' && dashboardPage === 'details');
+    btn.classList.toggle('active', active);
+  });
+}
+
+function wireHeader() {
+  const header = document.getElementById('site-header');
+  if (!header) return;
+
+  header.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-nav');
+      header.classList.remove('nav-open');
+      const toggle = document.getElementById('nav-toggle');
+      if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      if (id === 'upload') {
+        if (state.view !== 'upload') resetToUpload();
+        else document.getElementById('upload-zone')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (id === 'overview' || id === 'details') {
+        if (state.view === 'dashboard' && window.__flytbaseShowPage) {
+          window.__flytbaseShowPage(id);
+        }
+      }
+    });
+  });
+
+  header.querySelectorAll('[data-nav-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-nav-action');
+      if (action === 'choose-video') {
+        document.getElementById('upload-input')?.click();
+      } else if (action === 'new-video') {
+        resetToUpload();
+      }
+    });
+  });
+
+  const toggle = document.getElementById('nav-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const open = header.classList.toggle('nav-open');
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.classList.toggle('open', open);
+    });
+  }
 }
 
 function renderProcessing() {
@@ -107,30 +208,24 @@ function render() {
 
   if (state.view === 'upload') {
     app.innerHTML = headerHtml;
+    wireHeader();
     app.appendChild(contentDiv);
     renderUpload(contentDiv, {
       onFileSelected: handleFileUpload,
     });
   } else if (state.view === 'processing') {
     app.innerHTML = headerHtml + renderProcessing();
+    wireHeader();
   } else if (state.view === 'dashboard') {
     app.innerHTML = headerHtml;
+    wireHeader();
     app.appendChild(contentDiv);
     renderDashboard(contentDiv, state.results, {
-      onNewUpload: () => {
-        if (state.eventSource) state.eventSource.close();
-        setState({
-          view: 'upload',
-          jobId: null,
-          filename: null,
-          progress: { processed: 0, total: 0, fps: 0, eta_s: 0, timestamp_s: 0 },
-          results: null,
-          error: null,
-        });
-      },
+      onNewUpload: resetToUpload,
     });
   } else if (state.view === 'error') {
     app.innerHTML = headerHtml + renderError();
+    wireHeader();
     const retryBtn = document.getElementById('btn-retry');
     if (retryBtn) {
       retryBtn.addEventListener('click', () => {
@@ -183,11 +278,13 @@ async function handleFileUpload(file) {
       onDone: async (finalResult) => {
         try {
           const fullResults = await getResults(jobId);
+          dashboardPage = 'overview';
           setState({
             view: 'dashboard',
             results: fullResults,
           });
         } catch (fetchErr) {
+          dashboardPage = 'overview';
           setState({
             view: 'dashboard',
             results: { ...finalResult, job_id: jobId, filename: file.name },
@@ -213,3 +310,10 @@ async function handleFileUpload(file) {
 
 // Initial render
 render();
+
+// Visual-only: bold header shadow once scrolled (no state/logic change).
+window.addEventListener('scroll', () => {
+  const header = document.querySelector('.header');
+  if (!header) return;
+  header.classList.toggle('scrolled', window.scrollY > 8);
+}, { passive: true });

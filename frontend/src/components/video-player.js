@@ -124,14 +124,22 @@ export function renderVideoPlayer(container, jobId, meta, trajectories = {}, onL
     const normBox = boxes[bestIdx]; // [x1, y1, x2, y2] normalized 0..1
     const spd = speeds[bestIdx] || 0;
 
-    // Compute pixel position inside video element
+    // Map normalized coords onto the displayed video content.
+    // The video uses object-fit: contain, so account for letterboxing.
     const stageWidth = stage.clientWidth;
     const stageHeight = stage.clientHeight;
+    const vw = video.videoWidth || stageWidth;
+    const vh = video.videoHeight || stageHeight;
+    const scale = Math.min(stageWidth / vw, stageHeight / vh);
+    const dispW = vw * scale;
+    const dispH = vh * scale;
+    const offX = (stageWidth - dispW) / 2;
+    const offY = (stageHeight - dispH) / 2;
 
-    const left = normBox[0] * stageWidth;
-    const top = normBox[1] * stageHeight;
-    const width = Math.max((normBox[2] - normBox[0]) * stageWidth, 24);
-    const height = Math.max((normBox[3] - normBox[1]) * stageHeight, 24);
+    const left = offX + normBox[0] * dispW;
+    const top = offY + normBox[1] * dispH;
+    const width = Math.max((normBox[2] - normBox[0]) * dispW, 24);
+    const height = Math.max((normBox[3] - normBox[1]) * dispH, 24);
 
     targetBox.style.display = 'block';
     targetBox.style.left = `${left}px`;

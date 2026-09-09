@@ -5,7 +5,7 @@
 import { formatNumber, formatDuration, formatFps } from '../utils/format.js';
 import { getDownloadUrl } from '../api.js';
 import { renderVideoPlayer } from './video-player.js';
-import { renderClassChart } from './charts.js';
+import { renderClassChart, THEME_PALETTE } from './charts.js';
 
 export function renderDashboard(container, results, { onNewUpload }) {
   const analytics = results.analytics || {};
@@ -15,6 +15,23 @@ export function renderDashboard(container, results, { onNewUpload }) {
   const trajectories = analytics.trajectories || {};
 
   let currentlyLockedId = null;
+
+  // Top-2 classes drive the floating bubbles; colours resolve exactly like the chart.
+  const totalUnits = results.unique_tracks || overview.unique_tracks || 0;
+  const sortedClasses = [...classSummary].sort((a, b) => (b.tracks || 0) - (a.tracks || 0));
+  const bubbleA = sortedClasses[0] || null;
+  const bubbleB = sortedClasses[1] || null;
+  const bubbleColor = (entry, idx) =>
+    entry ? (entry.color || THEME_PALETTE[idx % THEME_PALETTE.length]) : '#0b0e0b';
+  const bubbleText = (bg) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(bg || '');
+    if (!m) return '#f4f7f2';
+    const r = parseInt(m[1].slice(0, 2), 16) / 255;
+    const g = parseInt(m[1].slice(2, 4), 16) / 255;
+    const b = parseInt(m[1].slice(4, 6), 16) / 255;
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return lum > 0.6 ? '#0b0e0b' : '#f4f7f2';
+  };
 
   container.innerHTML = `
     <section class="dashboard-section">
@@ -39,69 +56,99 @@ export function renderDashboard(container, results, { onNewUpload }) {
           </div>
         </div>
 
+        <!-- Page tabs -->
+        <div class="dash-tabs animate-in" role="tablist" aria-label="Dashboard pages">
+          <button class="dash-tab active" id="tab-overview" role="tab" aria-selected="true">Overview</button>
+          <button class="dash-tab" id="tab-details" role="tab" aria-selected="false">Tracking &amp; Details</button>
+        </div>
+
+        <!-- PAGE 1: Overview — stat cards + donut only -->
+        <div id="page-overview">
         <!-- Hero Metric Cards Grid -->
-        <div class="stats-grid animate-in animate-in-delay-1">
+        <div class="stats-grid stats-overview animate-in">
           <div class="stat-card" style="--card-accent: var(--accent-blue);">
-            <div class="stat-icon">🚗</div>
+            <div class="stat-top"><span class="stat-icon">🚗</span></div>
             <div class="stat-value" style="color: var(--accent-blue);">
               ${formatNumber(results.unique_tracks || overview.unique_tracks)}
             </div>
             <div class="stat-label">Unique Road Users</div>
+            <span class="stat-watermark" aria-hidden="true">🚗</span>
           </div>
 
           <div class="stat-card" style="--card-accent: var(--accent-emerald);">
-            <div class="stat-icon">⚡</div>
+            <div class="stat-top"><span class="stat-icon">⚡</span></div>
             <div class="stat-value" style="color: var(--accent-emerald);">
               ${overview.mean_speed_kmh ? `${overview.mean_speed_kmh}` : '18.4'} <span style="font-size: 16px; font-weight: 600;">km/h</span>
             </div>
             <div class="stat-label">Mean Traffic Speed</div>
+            <span class="stat-watermark" aria-hidden="true">⚡</span>
           </div>
 
           <div class="stat-card" style="--card-accent: var(--accent-purple);">
-            <div class="stat-icon">🎯</div>
+            <div class="stat-top"><span class="stat-icon">🎯</span></div>
             <div class="stat-value" style="color: var(--accent-purple);">
               ${formatNumber(results.total_detections || overview.total_detections)}
             </div>
             <div class="stat-label">Total Detections</div>
+            <span class="stat-watermark" aria-hidden="true">🎯</span>
           </div>
 
           <div class="stat-card" style="--card-accent: var(--accent-amber);">
-            <div class="stat-icon">⏱️</div>
+            <div class="stat-top"><span class="stat-icon">⏱️</span></div>
             <div class="stat-value" style="color: var(--accent-amber);">
               ${results.mean_track_length_s ? `${results.mean_track_length_s}s` : `${overview.mean_track_duration_s}s`}
             </div>
             <div class="stat-label">Avg. Track Duration</div>
+            <span class="stat-watermark" aria-hidden="true">⏱️</span>
           </div>
 
           <div class="stat-card" style="--card-accent: var(--accent-cyan);">
-            <div class="stat-icon">🏷️</div>
+            <div class="stat-top"><span class="stat-icon">🏷️</span></div>
             <div class="stat-value" style="color: var(--accent-cyan);">
               ${classSummary.length}
             </div>
             <div class="stat-label">Vehicle Classes</div>
+            <span class="stat-watermark" aria-hidden="true">🏷️</span>
           </div>
         </div>
 
-        <!-- Video Player Section with Real-Time Reticle HUD -->
-        <div id="video-container" class="animate-in animate-in-delay-2"></div>
-
-        <!-- 2-Column Analytics & Live Telemetry Deck -->
-        <div class="charts-grid two-column animate-in animate-in-delay-3" style="margin-bottom: 32px;">
-          <!-- 1. Modal Split Donut Chart -->
-          <div class="chart-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h3 class="chart-title" style="margin: 0;">📊 Modal Split (Unique Vehicles)</h3>
-              <span style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">
-                ${formatNumber(results.unique_tracks || overview.unique_tracks)} total units
-              </span>
+        <!-- Modal Split Donut Chart (reference-style) -->
+        <div class="modal-wrap animate-in">
+          <div class="chart-card modal-card">
+            <div class="modal-head">
+              <h3 class="chart-title" style="margin: 0;">Modal Split</h3>
+              <span class="modal-pill">${formatNumber(totalUnits)} units</span>
             </div>
-            <div class="chart-canvas-wrapper" style="max-height: 280px;">
-              <canvas id="class-chart"></canvas>
+            <div class="donut-stage">
+              ${bubbleA ? `
+              <div class="donut-bubble bubble-a" style="background: ${bubbleColor(bubbleA, sortedClasses.indexOf(bubbleA))}; color: ${bubbleText(bubbleColor(bubbleA, sortedClasses.indexOf(bubbleA)))};">
+                <span class="bubble-label">${bubbleA.label}</span>
+                <span class="bubble-value">${formatNumber(bubbleA.tracks)}</span>
+              </div>` : ''}
+              <div class="donut-ring">
+                <canvas id="class-chart"></canvas>
+                <div class="donut-center">
+                  <span class="donut-total">${formatNumber(totalUnits)}</span>
+                  <span class="donut-sub">vehicles</span>
+                </div>
+              </div>
+              ${bubbleB ? `
+              <div class="donut-bubble bubble-b" style="background: ${bubbleColor(bubbleB, sortedClasses.indexOf(bubbleB))}; color: ${bubbleText(bubbleColor(bubbleB, sortedClasses.indexOf(bubbleB)))};">
+                <span class="bubble-label">${bubbleB.label}</span>
+                <span class="bubble-value">${formatNumber(bubbleB.tracks)}</span>
+              </div>` : ''}
             </div>
           </div>
+        </div>
+        </div><!-- /page-overview -->
 
-          <!-- 2. Target Lock-On Telemetry Deck -->
-          <div class="chart-card telemetry-deck" id="telemetry-deck">
+        <!-- PAGE 2: Tracking & Details — video + telemetry + table -->
+        <div id="page-details" style="display: none;">
+        <!-- Video Player Section with Real-Time Reticle HUD -->
+        <div id="video-container"></div>
+
+        <!-- Target Lock-On Telemetry Deck -->
+        <div class="chart-card telemetry-deck" id="telemetry-deck" style="margin-bottom: 32px;">
             <div id="telemetry-idle" class="telemetry-state-idle">
               <div class="telemetry-idle-icon">🎯</div>
               <h4 style="font-size: 16px; margin-bottom: 6px;">Target Lock-On Telemetry</h4>
@@ -155,10 +202,9 @@ export function renderDashboard(container, results, { onNewUpload }) {
               </div>
             </div>
           </div>
-        </div>
 
         <!-- Active Track Telemetry Table -->
-        <div class="table-card animate-in animate-in-delay-4">
+        <div class="table-card">
           <div class="table-header">
             <div>
               <div class="table-title">
@@ -229,9 +275,34 @@ export function renderDashboard(container, results, { onNewUpload }) {
             </table>
           </div>
         </div>
+        </div><!-- /page-details -->
       </div>
     </section>
   `;
+
+  // Page tabs (Overview / Details) — pure view switch, no data change.
+  const tabOverview = container.querySelector('#tab-overview');
+  const tabDetails = container.querySelector('#tab-details');
+  const pageOverview = container.querySelector('#page-overview');
+  const pageDetails = container.querySelector('#page-details');
+
+  function showPage(which) {
+    const showOverview = which === 'overview';
+    pageOverview.style.display = showOverview ? '' : 'none';
+    pageDetails.style.display = showOverview ? 'none' : '';
+    tabOverview.classList.toggle('active', showOverview);
+    tabDetails.classList.toggle('active', !showOverview);
+    tabOverview.setAttribute('aria-selected', String(showOverview));
+    tabDetails.setAttribute('aria-selected', String(!showOverview));
+    window.dispatchEvent(new CustomEvent('flytbase:page', { detail: which }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Let the navbar switch tabs without reaching into dashboard internals.
+  window.__flytbaseShowPage = showPage;
+
+  tabOverview.addEventListener('click', () => showPage('overview'));
+  tabDetails.addEventListener('click', () => showPage('details'));
 
   // Telemetry Deck Elements
   const telIdle = container.querySelector('#telemetry-idle');

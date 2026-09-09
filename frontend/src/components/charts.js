@@ -1,22 +1,30 @@
 /**
- * charts.js — Chart.js modal split chart.
+ * charts.js — Chart.js modal split chart (reference-style thick rounded donut).
+ * Colours stay in the site theme: sage / olive / lime / ink.
  */
 
-const CLASS_COLORS = {
-  'car': '#38bdf8',
-  'motorcycle': '#f43f5e',
-  'pedestrian': '#94a3b8',
-  'cyclist': '#10b981',
-  'bus': '#a855f7',
-  'LGV': '#06b6d4',
-  'HGV': '#f97316',
-  'three-wheeler': '#eab308',
-};
+/** Theme palette — ink → olive → lime progression + earthy anchors. */
+export const THEME_PALETTE = [
+  '#0b0e0b',
+  '#2e3d2c',
+  '#5a6f52',
+  '#93a832',
+  '#d7e838',
+  '#77691a',
+  '#7d8b7a',
+  '#43564a',
+];
 
-const FALLBACK_COLOR = '#64748b';
+const FALLBACK_COLOR = '#5a6f52';
+
+export function themeColorFor(index, fallback) {
+  if (fallback) return fallback;
+  return THEME_PALETTE[index % THEME_PALETTE.length] || FALLBACK_COLOR;
+}
 
 /**
  * Render the class breakdown doughnut chart.
+ * Returns { chart, colors } so the card bubbles can match segment colours.
  */
 export function renderClassChart(canvasId, classSummary) {
   const canvas = document.getElementById(canvasId);
@@ -24,44 +32,54 @@ export function renderClassChart(canvasId, classSummary) {
 
   const labels = classSummary.map(c => c.label);
   const data = classSummary.map(c => c.tracks);
-  const colors = classSummary.map(c => c.color || CLASS_COLORS[c.class_group] || FALLBACK_COLOR);
+  const colors = classSummary.map((c, i) => c.color || THEME_PALETTE[i % THEME_PALETTE.length]);
 
-  return new Chart(canvas, {
+  const chart = new Chart(canvas, {
     type: 'doughnut',
     data: {
       labels,
       datasets: [{
         data,
         backgroundColor: colors,
-        borderColor: 'rgba(10, 14, 23, 0.8)',
-        borderWidth: 2,
-        hoverBorderColor: '#fff',
+        borderColor: '#eef2ec',
+        borderWidth: 3,
+        borderRadius: 14,
+        spacing: 3,
+        hoverBorderColor: '#080808',
         hoverBorderWidth: 2,
-        hoverOffset: 8,
+        hoverOffset: 10,
       }],
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
-      cutout: '65%',
+      maintainAspectRatio: false,
+      cutout: '72%',
+      layout: { padding: 18 },
+      animation: {
+        duration: 750,
+        easing: 'easeOutQuart',
+        animateRotate: true,
+        animateScale: false,
+      },
       plugins: {
         legend: {
-          position: 'right',
+          position: 'bottom',
           labels: {
-            color: '#94a3b8',
-            font: { family: "'Inter', sans-serif", size: 12, weight: '500' },
-            padding: 14,
+            color: '#4e5a4d',
+            font: { family: "'Inter', sans-serif", size: 11, weight: '600' },
+            padding: 12,
             usePointStyle: true,
+            pointStyle: 'circle',
             pointStyleWidth: 8,
           },
         },
         tooltip: {
-          backgroundColor: 'rgba(15, 23, 42, 0.95)',
-          titleColor: '#f1f5f9',
-          bodyColor: '#94a3b8',
-          borderColor: 'rgba(255,255,255,0.1)',
+          backgroundColor: 'rgba(8, 8, 8, 0.94)',
+          titleColor: '#e5ff4f',
+          bodyColor: '#f1f4f0',
+          borderColor: 'rgba(229, 255, 79, 0.4)',
           borderWidth: 1,
-          cornerRadius: 8,
+          cornerRadius: 10,
           padding: 12,
           titleFont: { family: "'Inter', sans-serif", weight: '600' },
           bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
@@ -76,4 +94,6 @@ export function renderClassChart(canvasId, classSummary) {
       },
     },
   });
+
+  return { chart, colors };
 }
