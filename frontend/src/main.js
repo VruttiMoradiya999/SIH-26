@@ -4,6 +4,7 @@
 
 import './style.css';
 import { uploadVideo, subscribeProgress, getResults } from './api.js';
+import { renderLanding } from './components/landing.js';
 import { renderUpload } from './components/upload.js';
 import { renderDashboard } from './components/dashboard.js';
 import { formatNumber, formatDuration } from './utils/format.js';
@@ -12,7 +13,7 @@ const app = document.getElementById('app');
 
 // State management
 let state = {
-  view: 'upload', // 'upload' | 'processing' | 'dashboard' | 'error'
+  view: 'landing', // 'landing' | 'upload' | 'processing' | 'dashboard' | 'error'
   jobId: null,
   filename: null,
   progress: {
@@ -34,6 +35,12 @@ window.addEventListener('flytbase:page', (e) => {
   syncNavActive();
 });
 
+// Dashboard icon rail requests (home / upload views).
+window.addEventListener('flytbase:nav', (e) => {
+  if (e.detail === 'home' && state.view !== 'landing') goLanding();
+  else if (e.detail === 'upload' && state.view !== 'upload') goUpload();
+});
+
 function setState(updates) {
   state = { ...state, ...updates };
   render();
@@ -48,21 +55,25 @@ function renderHeader() {
   const overviewActive = onDashboard && dashboardPage === 'overview';
   const detailsActive = onDashboard && dashboardPage === 'details';
   const uploadActive = view === 'upload';
+  const homeActive = view === 'landing';
 
   const cta = view === 'processing'
     ? `<button class="btn btn-new nav-cta" disabled style="opacity: 0.7; cursor: default;">${pct}% analyzing…</button>`
     : view === 'dashboard'
       ? `<button class="btn btn-new nav-cta" data-nav-action="new-video">➕ New video</button>`
-      : `<button class="btn btn-new nav-cta" data-nav-action="choose-video">🎬 Choose video</button>`;
+      : view === 'landing'
+        ? `<button class="btn btn-new nav-cta" data-nav-action="get-started">Get Started</button>`
+        : `<button class="btn btn-new nav-cta" data-nav-action="choose-video">🎬 Choose video</button>`;
 
   return `
     <header class="header" id="site-header">
       <div class="container header-inner">
-        <button class="logo nav-logo" data-nav="upload" aria-label="FlytBase home">
+        <button class="logo nav-logo" data-nav="home" aria-label="FlytBase home">
           <span class="logo-icon">🛸</span>
           <span class="logo-text">Flyt<span>Base</span></span>
         </button>
         <nav class="nav-links" aria-label="Primary">
+          <button class="nav-link${homeActive ? ' active' : ''}" data-nav="home">Home</button>
           <button class="nav-link${uploadActive ? ' active' : ''}" data-nav="upload">Upload</button>
           <button class="nav-link${overviewActive ? ' active' : ''}" data-nav="overview" ${onDashboard ? '' : 'disabled title="Available after analysis"'}>Overview</button>
           <button class="nav-link${detailsActive ? ' active' : ''}" data-nav="details" ${onDashboard ? '' : 'disabled title="Available after analysis"'}>Tracking &amp; Details</button>
@@ -82,8 +93,22 @@ function renderHeader() {
   `;
 }
 
-function resetToUpload() {
+function goLanding() {
   if (state.eventSource) state.eventSource.close();
+  dashboardPage = 'overview';
+  setState({
+    view: 'landing',
+    jobId: null,
+    filename: null,
+    progress: { processed: 0, total: 0, fps: 0, eta_s: 0, timestamp_s: 0 },
+    results: null,
+    error: null,
+  });
+}
+
+function goUpload() {
+  if (state.eventSource) state.eventSource.close();
+  dashboardPage = 'overview';
   setState({
     view: 'upload',
     jobId: null,
@@ -92,7 +117,10 @@ function resetToUpload() {
     results: null,
     error: null,
   });
-  dashboardPage = 'overview';
+}
+
+function resetToUpload() {
+  goUpload();
 }
 
 function syncNavActive() {
@@ -101,6 +129,7 @@ function syncNavActive() {
   header.querySelectorAll('.nav-link').forEach(btn => {
     const id = btn.getAttribute('data-nav');
     const active =
+      (id === 'home' && state.view === 'landing') ||
       (id === 'upload' && state.view === 'upload') ||
       (id === 'overview' && state.view === 'dashboard' && dashboardPage === 'overview') ||
       (id === 'details' && state.view === 'dashboard' && dashboardPage === 'details');
@@ -118,8 +147,11 @@ function wireHeader() {
       header.classList.remove('nav-open');
       const toggle = document.getElementById('nav-toggle');
       if (toggle) toggle.setAttribute('aria-expanded', 'false');
-      if (id === 'upload') {
-        if (state.view !== 'upload') resetToUpload();
+      if (id === 'home') {
+        if (state.view !== 'landing') goLanding();
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (id === 'upload') {
+        if (state.view !== 'upload') goUpload();
         else document.getElementById('upload-zone')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else if (id === 'overview' || id === 'details') {
         if (state.view === 'dashboard' && window.__flytbaseShowPage) {
@@ -136,6 +168,9 @@ function wireHeader() {
         document.getElementById('upload-input')?.click();
       } else if (action === 'new-video') {
         resetToUpload();
+      } else if (action === 'get-started') {
+        goUpload();
+        setTimeout(() => document.getElementById('upload-zone')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
       }
     });
   });
@@ -153,14 +188,42 @@ function wireHeader() {
 function renderProcessing() {
   const p = state.progress;
   const pct = p.total > 0 ? Math.min(Math.round((p.processed / p.total) * 100), 100) : 0;
+  const carLeft = 4 + (pct / 100) * 88;
 
   return `
     <section class="processing-section">
       <div class="container">
-        <div class="processing-card animate-in">
-          <div class="processing-spinner"></div>
+        <div class="processing-card processing-sheet animate-in">
           <h2 class="processing-title">Analyzing Drone Footage</h2>
           <div class="processing-filename">${state.filename || 'Processing video...'}</div>
+
+          <div class="road-scene" id="road-scene" aria-hidden="true">
+            <span class="road-bush" style="left: 5%; width: 58px; height: 34px;"></span>
+            <span class="road-bush" style="left: 12%; width: 36px; height: 22px; opacity: 0.6;"></span>
+            <span class="road-bush" style="right: 6%; width: 66px; height: 38px;"></span>
+            <div class="road-drone" id="road-drone" style="left: ${carLeft}%;">🛸</div>
+            <div class="road-scan" id="road-scan" style="left: ${carLeft}%;"></div>
+            <div class="road-wrap">
+              <div class="road"></div>
+              <div class="road-car" id="road-car" style="left: ${carLeft}%;">
+                <svg viewBox="0 0 132 60" width="104" height="48">
+                  <rect x="6" y="30" width="120" height="12" rx="6" fill="#0b0e0b"/>
+                  <path d="M22 30 L34 14 L78 14 L94 30 Z" fill="#0b0e0b"/>
+                  <path d="M38 28 L47 17 L73 17 L82 28 Z" fill="#e5ff4f"/>
+                  <rect x="118" y="32" width="8" height="5" rx="2" fill="#e5ff4f"/>
+                  <rect x="4" y="32" width="6" height="5" rx="2" fill="#a64141"/>
+                  <g class="wheel" style="transform-box: fill-box; transform-origin: center;">
+                    <circle cx="34" cy="44" r="11" fill="#1c221c" stroke="#0b0e0b" stroke-width="2"/>
+                    <circle cx="34" cy="44" r="4" fill="#e5ff4f"/>
+                  </g>
+                  <g class="wheel" style="transform-box: fill-box; transform-origin: center;">
+                    <circle cx="98" cy="44" r="11" fill="#1c221c" stroke="#0b0e0b" stroke-width="2"/>
+                    <circle cx="98" cy="44" r="4" fill="#e5ff4f"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </div>
 
           <div class="progress-bar-container">
             <div class="progress-bar" style="width: ${pct}%;"></div>
@@ -206,7 +269,14 @@ function render() {
   const headerHtml = renderHeader();
   const contentDiv = document.createElement('div');
 
-  if (state.view === 'upload') {
+  if (state.view === 'landing') {
+    app.innerHTML = headerHtml;
+    wireHeader();
+    app.appendChild(contentDiv);
+    renderLanding(contentDiv, {
+      onGetStarted: goUpload,
+    });
+  } else if (state.view === 'upload') {
     app.innerHTML = headerHtml;
     wireHeader();
     app.appendChild(contentDiv);
@@ -272,10 +342,23 @@ async function handleFileUpload(file) {
             if (statLbls.length >= 1) {
               statLbls[0].innerHTML = `Progress (${p.processed}/${p.total || '?'})`;
             }
+            // Drive the car + drone across the road with progress.
+            const carLeft = 4 + (pct / 100) * 88;
+            const car = processingCard.querySelector('#road-car');
+            if (car) car.style.left = `${carLeft}%`;
+            const drone = processingCard.querySelector('#road-drone');
+            if (drone) drone.style.left = `${carLeft}%`;
+            const scan = processingCard.querySelector('#road-scan');
+            if (scan) scan.style.left = `${carLeft}%`;
           }
         }
       },
       onDone: async (finalResult) => {
+        // Beat: car drives off the road, drone lifts away, then dashboard.
+        document.querySelector('.road-scene')?.classList.add('drive-off');
+        const car = document.querySelector('#road-car');
+        if (car) car.style.left = '112%';
+        await new Promise((r) => setTimeout(r, 800));
         try {
           const fullResults = await getResults(jobId);
           dashboardPage = 'overview';

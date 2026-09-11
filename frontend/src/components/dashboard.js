@@ -16,22 +16,21 @@ export function renderDashboard(container, results, { onNewUpload }) {
 
   let currentlyLockedId = null;
 
-  // Top-2 classes drive the floating bubbles; colours resolve exactly like the chart.
+  // Overview data prep — colours resolve exactly like the chart segments.
   const totalUnits = results.unique_tracks || overview.unique_tracks || 0;
   const sortedClasses = [...classSummary].sort((a, b) => (b.tracks || 0) - (a.tracks || 0));
-  const bubbleA = sortedClasses[0] || null;
-  const bubbleB = sortedClasses[1] || null;
-  const bubbleColor = (entry, idx) =>
-    entry ? (entry.color || THEME_PALETTE[idx % THEME_PALETTE.length]) : '#0b0e0b';
-  const bubbleText = (bg) => {
-    const m = /^#([0-9a-f]{6})$/i.exec(bg || '');
-    if (!m) return '#f4f7f2';
-    const r = parseInt(m[1].slice(0, 2), 16) / 255;
-    const g = parseInt(m[1].slice(2, 4), 16) / 255;
-    const b = parseInt(m[1].slice(4, 6), 16) / 255;
-    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    return lum > 0.6 ? '#0b0e0b' : '#f4f7f2';
-  };
+  const segColor = (entry) =>
+    entry ? (entry.color || THEME_PALETTE[classSummary.indexOf(entry) % THEME_PALETTE.length]) : '#0b0e0b';
+  const share = (entry) => (totalUnits && entry ? (entry.tracks / totalUnits) * 100 : 0);
+  const dominant = sortedClasses[0] || null;
+  const top3 = sortedClasses.slice(0, 3);
+  const meanSpeed = parseFloat(overview.mean_speed_kmh) || 0;
+  const peakTrack = trackSummaries.reduce(
+    (best, t) => (!best || (t.max_speed_kmh || 0) > (best.max_speed_kmh || 0) ? t : best), null);
+  const peakSpeed = peakTrack ? peakTrack.max_speed_kmh || 0 : 0;
+  const avgDur = results.mean_track_length_s || overview.mean_track_duration_s || 0;
+  const totalDet = results.total_detections || overview.total_detections || 0;
+  const scalePct = peakSpeed > 0 ? Math.min((meanSpeed / peakSpeed) * 100, 100) : 0;
 
   container.innerHTML = `
     <section class="dashboard-section">
@@ -56,90 +55,78 @@ export function renderDashboard(container, results, { onNewUpload }) {
           </div>
         </div>
 
-        <!-- Page tabs -->
-        <div class="dash-tabs animate-in" role="tablist" aria-label="Dashboard pages">
-          <button class="dash-tab active" id="tab-overview" role="tab" aria-selected="true">Overview</button>
-          <button class="dash-tab" id="tab-details" role="tab" aria-selected="false">Tracking &amp; Details</button>
-        </div>
+        <!-- App shell -->
+        <div class="dash-shell">
+          <div class="dash-main">
 
-        <!-- PAGE 1: Overview — stat cards + donut only -->
+        <!-- PAGE 1: Overview -->
         <div id="page-overview">
-        <!-- Hero Metric Cards Grid -->
-        <div class="stats-grid stats-overview animate-in">
-          <div class="stat-card" style="--card-accent: var(--accent-blue);">
-            <div class="stat-top"><span class="stat-icon">🚗</span></div>
-            <div class="stat-value" style="color: var(--accent-blue);">
-              ${formatNumber(results.unique_tracks || overview.unique_tracks)}
+          <!-- Gradient hero cards -->
+          <div class="hero-row">
+            <div class="hero-card hero-mix">
+              <div class="hero-card-top">
+                <span class="hero-kicker">🚗&nbsp;&nbsp;Traffic mix</span>
+                <span class="hero-card-sub">of ${formatNumber(totalUnits)} road users</span>
+              </div>
+              <div class="hero-big">${dominant ? formatNumber(dominant.tracks) : '—'}<span>${dominant ? dominant.label : 'no data'}</span></div>
+              <div class="hero-chips">
+                ${top3.map((c) => `
+                  <span class="mix-chip">
+                    <span class="dot" style="background: ${segColor(c)};"></span>
+                    ${c.label} · <strong>${formatNumber(c.tracks)}</strong>
+                  </span>`).join('')}
+              </div>
             </div>
-            <div class="stat-label">Unique Road Users</div>
-            <span class="stat-watermark" aria-hidden="true">🚗</span>
+
+            <div class="hero-card hero-speed">
+              <div class="hero-card-top">
+                <span class="hero-kicker">⚡&nbsp;&nbsp;Speed profile</span>
+                <span class="hero-card-sub">mean across tracks</span>
+              </div>
+              <div class="hero-big">${meanSpeed}<span>km/h</span></div>
+              <div class="speed-scale"><div class="speed-marker" style="left: ${scalePct}%;"></div></div>
+              <div class="speed-ends"><span>0</span><span>Peak ${peakSpeed} km/h</span></div>
+            </div>
           </div>
 
-          <div class="stat-card" style="--card-accent: var(--accent-emerald);">
-            <div class="stat-top"><span class="stat-icon">⚡</span></div>
-            <div class="stat-value" style="color: var(--accent-emerald);">
-              ${overview.mean_speed_kmh ? `${overview.mean_speed_kmh}` : '18.4'} <span style="font-size: 16px; font-weight: 600;">km/h</span>
-            </div>
-            <div class="stat-label">Mean Traffic Speed</div>
-            <span class="stat-watermark" aria-hidden="true">⚡</span>
-          </div>
-
-          <div class="stat-card" style="--card-accent: var(--accent-purple);">
-            <div class="stat-top"><span class="stat-icon">🎯</span></div>
-            <div class="stat-value" style="color: var(--accent-purple);">
-              ${formatNumber(results.total_detections || overview.total_detections)}
-            </div>
-            <div class="stat-label">Total Detections</div>
-            <span class="stat-watermark" aria-hidden="true">🎯</span>
-          </div>
-
-          <div class="stat-card" style="--card-accent: var(--accent-amber);">
-            <div class="stat-top"><span class="stat-icon">⏱️</span></div>
-            <div class="stat-value" style="color: var(--accent-amber);">
-              ${results.mean_track_length_s ? `${results.mean_track_length_s}s` : `${overview.mean_track_duration_s}s`}
-            </div>
-            <div class="stat-label">Avg. Track Duration</div>
-            <span class="stat-watermark" aria-hidden="true">⏱️</span>
-          </div>
-
-          <div class="stat-card" style="--card-accent: var(--accent-cyan);">
-            <div class="stat-top"><span class="stat-icon">🏷️</span></div>
-            <div class="stat-value" style="color: var(--accent-cyan);">
-              ${classSummary.length}
-            </div>
-            <div class="stat-label">Vehicle Classes</div>
-            <span class="stat-watermark" aria-hidden="true">🏷️</span>
-          </div>
-        </div>
-
-        <!-- Modal Split Donut Chart (reference-style) -->
-        <div class="modal-wrap animate-in">
-          <div class="chart-card modal-card">
-            <div class="modal-head">
-              <h3 class="chart-title" style="margin: 0;">Modal Split</h3>
-              <span class="modal-pill">${formatNumber(totalUnits)} units</span>
-            </div>
-            <div class="donut-stage">
-              ${bubbleA ? `
-              <div class="donut-bubble bubble-a" style="background: ${bubbleColor(bubbleA, sortedClasses.indexOf(bubbleA))}; color: ${bubbleText(bubbleColor(bubbleA, sortedClasses.indexOf(bubbleA)))};">
-                <span class="bubble-label">${bubbleA.label}</span>
-                <span class="bubble-value">${formatNumber(bubbleA.tracks)}</span>
-              </div>` : ''}
+          <!-- Pattern donut + session panel -->
+          <div class="content-grid">
+            <div class="chart-card donut-card">
+              <div class="modal-head">
+                <h3 class="chart-title" style="margin: 0;">Modal Split</h3>
+                <span class="modal-pill">${formatNumber(totalUnits)} units</span>
+              </div>
               <div class="donut-ring">
                 <canvas id="class-chart"></canvas>
-                <div class="donut-center">
-                  <span class="donut-total">${formatNumber(totalUnits)}</span>
-                  <span class="donut-sub">vehicles</span>
-                </div>
               </div>
-              ${bubbleB ? `
-              <div class="donut-bubble bubble-b" style="background: ${bubbleColor(bubbleB, sortedClasses.indexOf(bubbleB))}; color: ${bubbleText(bubbleColor(bubbleB, sortedClasses.indexOf(bubbleB)))};">
-                <span class="bubble-label">${bubbleB.label}</span>
-                <span class="bubble-value">${formatNumber(bubbleB.tracks)}</span>
-              </div>` : ''}
             </div>
+
+            <aside class="session-panel">
+              <h3 class="session-title">Session</h3>
+              <div class="sess-rows">
+                <div class="sess-row"><span>File</span><strong class="mono">${results.filename || 'Source Video'}</strong></div>
+                <div class="sess-row"><span>Duration</span><strong>${formatDuration(results.duration_s)}</strong></div>
+                <div class="sess-row"><span>Device</span><strong>${(results.device || 'auto').toUpperCase()}</strong></div>
+                <div class="sess-row"><span>Road users</span><strong>${formatNumber(totalUnits)}</strong></div>
+                <div class="sess-row"><span>Detections</span><strong>${formatNumber(totalDet)}</strong></div>
+                <div class="sess-row"><span>Avg. track</span><strong>${avgDur}s</strong></div>
+              </div>
+              <h4 class="rank-title">Class ranking</h4>
+              <div class="rank-list">
+                ${sortedClasses.slice(0, 6).map((c, i) => `
+                  <div class="rank-row">
+                    <span class="rank-num">${i + 1}</span>
+                    <span class="dot" style="background: ${segColor(c)};"></span>
+                    <span class="rank-label">${c.label}</span>
+                    <span class="rank-val mono">${formatNumber(c.tracks)} · ${share(c).toFixed(0)}%</span>
+                  </div>`).join('') || '<div class="rank-row">No classes recorded</div>'}
+              </div>
+              <div class="peak-card">
+                <div class="peak-top"><span>☀️ Peak speed</span>${peakTrack ? `<span class="peak-tag">${peakTrack.label} #${peakTrack.track_id}</span>` : ''}</div>
+                <div class="peak-big">${peakSpeed}<span> km/h</span></div>
+              </div>
+            </aside>
           </div>
-        </div>
         </div><!-- /page-overview -->
 
         <!-- PAGE 2: Tracking & Details — video + telemetry + table -->
@@ -214,7 +201,10 @@ export function renderDashboard(container, results, { onNewUpload }) {
                 Click any row or the 🎯 Lock button to focus the video HUD on that vehicle.
               </p>
             </div>
-            <div class="table-count">Showing ${trackSummaries.length} tracked road users</div>
+            <div class="table-tools">
+              <input class="track-search" id="track-search" type="search" placeholder="Search tracks…" aria-label="Search tracks" />
+              <div class="table-count" id="track-count">Showing ${trackSummaries.length} tracked road users</div>
+            </div>
           </div>
           <div class="table-wrapper">
             <table class="data-table" id="tracks-table">
@@ -276,13 +266,14 @@ export function renderDashboard(container, results, { onNewUpload }) {
           </div>
         </div>
         </div><!-- /page-details -->
+          </div><!-- /dash-main -->
+        </div><!-- /dash-shell -->
       </div>
     </section>
   `;
 
-  // Page tabs (Overview / Details) — pure view switch, no data change.
-  const tabOverview = container.querySelector('#tab-overview');
-  const tabDetails = container.querySelector('#tab-details');
+  // Page switching — pure view switch, no data change.
+  // (The top navbar drives this via window.__flytbaseShowPage.)
   const pageOverview = container.querySelector('#page-overview');
   const pageDetails = container.querySelector('#page-details');
 
@@ -290,10 +281,6 @@ export function renderDashboard(container, results, { onNewUpload }) {
     const showOverview = which === 'overview';
     pageOverview.style.display = showOverview ? '' : 'none';
     pageDetails.style.display = showOverview ? 'none' : '';
-    tabOverview.classList.toggle('active', showOverview);
-    tabDetails.classList.toggle('active', !showOverview);
-    tabOverview.setAttribute('aria-selected', String(showOverview));
-    tabDetails.setAttribute('aria-selected', String(!showOverview));
     window.dispatchEvent(new CustomEvent('flytbase:page', { detail: which }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -301,8 +288,23 @@ export function renderDashboard(container, results, { onNewUpload }) {
   // Let the navbar switch tabs without reaching into dashboard internals.
   window.__flytbaseShowPage = showPage;
 
-  tabOverview.addEventListener('click', () => showPage('overview'));
-  tabDetails.addEventListener('click', () => showPage('details'));
+  // Track directory search — filters rows by id / class / status.
+  const searchInput = container.querySelector('#track-search');
+  const trackCount = container.querySelector('#track-count');
+  const allRows = [...container.querySelectorAll('.track-row')];
+  function applySearch() {
+    const q = (searchInput.value || '').trim().toLowerCase();
+    let visible = 0;
+    allRows.forEach((row) => {
+      const hit = !q || row.textContent.toLowerCase().includes(q);
+      row.style.display = hit ? '' : 'none';
+      if (hit) visible += 1;
+    });
+    trackCount.textContent = q
+      ? `Showing ${visible} of ${allRows.length} tracked road users`
+      : `Showing ${allRows.length} tracked road users`;
+  }
+  searchInput.addEventListener('input', applySearch);
 
   // Telemetry Deck Elements
   const telIdle = container.querySelector('#telemetry-idle');
